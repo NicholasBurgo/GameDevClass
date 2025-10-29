@@ -1,0 +1,7 @@
+metorid that crash into each other
+star field with random direction(predetermined) like my lua game
+
+Laser, metorid physics, and main menu gameplay like supersmash bros // not happening
+have 1 boss fight at the end
+(use laser from lua dodgeGame)
+Have a loss screen saying that the player isnt good using mario themed music

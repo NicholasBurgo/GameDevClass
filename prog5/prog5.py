@@ -54,7 +54,7 @@ class Star:
         pygame.draw.circle(screen, color, (int(self.x), int(self.y)), self.size)
 
 class Bullet:
-    def __init__(self, x, y, angle):
+    def __init__(self, x, y, angle, damage=30):
         self.x = x
         self.y = y
         self.angle = angle
@@ -62,6 +62,7 @@ class Bullet:
         self.radius = 3
         self.active = True
         self.lifetime = 120  # Frames before bullet despawns
+        self.damage = damage  # Bullet damage
         
     def update(self):
         if not self.active:
@@ -86,9 +87,112 @@ class Bullet:
             
     def draw(self, screen):
         if self.active:
-            # Draw bright white bullet
-            pygame.draw.circle(screen, WHITE, (int(self.x), int(self.y)), self.radius)
-            pygame.draw.circle(screen, YELLOW, (int(self.x), int(self.y)), self.radius - 1)
+            # Draw bullet - larger and brighter if charged
+            if self.damage > 30:
+                # Charged shot - bigger and more vibrant
+                size_multiplier = 1 + (self.damage / 150) * 4  # Max 5x size
+                radius = int(self.radius * size_multiplier)
+                # Bright cyan/blue for charged shots
+                color_intensity = min(255, 100 + int(self.damage / 150 * 155))
+                pygame.draw.circle(screen, (0, color_intensity, 255), (int(self.x), int(self.y)), radius)
+                pygame.draw.circle(screen, (200, 255, 255), (int(self.x), int(self.y)), int(radius * 0.7))
+                pygame.draw.circle(screen, (255, 255, 255), (int(self.x), int(self.y)), int(radius * 0.4))
+            else:
+                # Regular shot
+                pygame.draw.circle(screen, WHITE, (int(self.x), int(self.y)), self.radius)
+                pygame.draw.circle(screen, YELLOW, (int(self.x), int(self.y)), self.radius - 1)
+
+class Beam:
+    def __init__(self, x, y, angle, damage=150):
+        self.start_x = x
+        self.start_y = y
+        self.angle = angle
+        self.damage = damage
+        self.active = True
+        self.lifetime = 15  # Beam lasts for 15 frames (0.25 seconds at 60 FPS)
+        self.length = 2000  # Beam extends 2000 pixels (covers entire screen)
+        self.width = 40  # Beam width
+        self.hit_targets = set()  # Track what we've already hit to avoid multiple hits
+        
+    def update(self):
+        if not self.active:
+            return
+            
+        self.lifetime -= 1
+        if self.lifetime <= 0:
+            self.active = False
+            
+    def get_end_point(self):
+        """Get the end point of the beam"""
+        end_x = self.start_x + math.cos(self.angle) * self.length
+        end_y = self.start_y + math.sin(self.angle) * self.length
+        return (end_x, end_y)
+    
+    def check_collision_point(self, point_x, point_y, radius):
+        """Check if a point (with radius) collides with the beam"""
+        # Calculate distance from point to beam line
+        end_x, end_y = self.get_end_point()
+        
+        # Vector from start to end
+        dx = end_x - self.start_x
+        dy = end_y - self.start_y
+        
+        # Vector from start to point
+        px = point_x - self.start_x
+        py = point_y - self.start_y
+        
+        # Project point onto beam line
+        dot = px * dx + py * dy
+        length_sq = dx * dx + dy * dy
+        
+        if length_sq == 0:
+            # Beam has zero length
+            dist = math.sqrt(px * px + py * py)
+            return dist < (radius + self.width / 2)
+        
+        t = max(0, min(1, dot / length_sq))
+        closest_x = self.start_x + t * dx
+        closest_y = self.start_y + t * dy
+        
+        # Distance from point to closest point on beam
+        dist_x = point_x - closest_x
+        dist_y = point_y - closest_y
+        dist = math.sqrt(dist_x * dist_x + dist_y * dist_y)
+        
+        # Check if within beam width + target radius
+        return dist < (radius + self.width / 2)
+    
+    def draw(self, screen):
+        if not self.active:
+            return
+            
+        end_x, end_y = self.get_end_point()
+        
+        # Draw beam with gradient layers - outer to inner
+        # Outer glow - pale blue
+        for i in range(4):
+            alpha_factor = 0.3 - (i * 0.05)
+            width_factor = 1.0 + (i * 0.3)
+            color = (int(100 * alpha_factor), int(200 * alpha_factor), int(255 * alpha_factor))
+            width = int(self.width * width_factor)
+            pygame.draw.line(screen, color,
+                           (int(self.start_x), int(self.start_y)),
+                           (int(end_x), int(end_y)),
+                           width=max(1, width))
+        
+        # Core beam - bright cyan/white
+        core_colors = [
+            ((0, 255, 255), 12),   # Bright cyan core
+            ((100, 255, 255), 16),  # Light cyan
+            ((200, 255, 255), 20),  # Pale cyan
+            ((255, 255, 255), 24),  # White outer
+        ]
+        
+        for color, width in core_colors:
+            pygame.draw.line(screen, color,
+                           (int(self.start_x), int(self.start_y)),
+                           (int(end_x), int(end_y)),
+                           width=width)
 
 class Asteroid:
     def __init__(self, x=None, y=None, size=None):
@@ -98,15 +202,15 @@ class Asteroid:
             
         self.size = size
         if size == "large":
-            self.radius = 50
+            self.radius = 100
             self.speed = random.uniform(1, 2)
             self.value = 100
         elif size == "medium":
-            self.radius = 30
+            self.radius = 60
             self.speed = random.uniform(2, 3)
             self.value = 50
         else:
-            self.radius = 15
+            self.radius = 30
             self.speed = random.uniform(3, 4)
             self.value = 20
             
@@ -135,11 +239,31 @@ class Asteroid:
         self.vel_x = math.cos(angle) * self.speed
         self.vel_y = math.sin(angle) * self.speed
         
-        # For drawing polygon shape
+        # Load asteroid image
+        image_paths = ["prog5/Assets/Astroid.png", "Assets/Astroid.png"]
+        self.base_image = None
+        self.image = None
+        
+        for path in image_paths:
+            try:
+                self.base_image = pygame.image.load(path).convert_alpha()
+                # Scale image based on asteroid size
+                image_size = int(self.radius * 2)
+                self.base_image = pygame.transform.scale(self.base_image, (image_size, image_size))
+                break
+            except:
+                continue
+        
+        # Rotation for asteroids
+        self.rotation_angle = 0
+        self.rotation_speed = random.uniform(0.02, 0.05)
+        
+        # For drawing polygon shape (fallback if image not loaded)
         self.vertices = []
         self.generate_shape()
         
         self.active = True
+        self.id = id(self)  # Unique ID for collision tracking
         
     def generate_shape(self):
         # Generate random irregular polygon shape
@@ -170,7 +294,13 @@ class Asteroid:
         elif self.y > WINDOW_HEIGHT + self.radius:
             self.y = -self.radius
             
-        # Update vertices positions
+        # Update rotation
+        if self.base_image:
+            self.rotation_angle += self.rotation_speed
+            if self.rotation_angle >= 2 * math.pi:
+                self.rotation_angle -= 2 * math.pi
+            
+        # Update vertices positions (fallback for polygon drawing)
         for i, (vx, vy) in enumerate(self.vertices):
             angle = (2 * math.pi / len(self.vertices)) * i
             radius_var = self.radius * random.uniform(0.7, 1.0)
@@ -225,13 +355,22 @@ class Asteroid:
     def draw(self, screen):
         if not self.active:
             return
-            
-        # Draw irregular polygon
-        pygame.draw.polygon(screen, (128, 128, 128), self.vertices)
-        pygame.draw.polygon(screen, WHITE, self.vertices, width=2)
         
-        # Draw center dot
-        pygame.draw.circle(screen, (200, 200, 200), (int(self.x), int(self.y)), 3)
+        # Draw image if loaded
+        if self.base_image:
+            # Rotate the image
+            rotated_image = pygame.transform.rotate(self.base_image, math.degrees(-self.rotation_angle))
+            
+            # Get the rect and center it on the asteroid position
+            rect = rotated_image.get_rect()
+            screen.blit(rotated_image, (int(self.x - rect.width // 2), int(self.y - rect.height // 2)))
+        else:
+            # Fallback: Draw irregular polygon if image not loaded
+            pygame.draw.polygon(screen, (128, 128, 128), self.vertices)
+            pygame.draw.polygon(screen, WHITE, self.vertices, width=2)
+            
+            # Draw center dot
+            pygame.draw.circle(screen, (200, 200, 200), (int(self.x), int(self.y)), 3)
 
 class Player:
     def __init__(self):
@@ -259,8 +398,21 @@ class Player:
         
         # Shooting
         self.bullets = []
+        self.beams = []  # Beams for fully charged shots
         self.shoot_cooldown = 0
         self.max_shoot_cooldown = 10
+        
+        # Charged shot system
+        self.is_charging = False
+        self.charge_time = 0.0  # Time spent charging in seconds
+        self.max_charge_time = 5.0  # Max charge time (5 seconds)
+        self.charged_damage = 30  # Base damage
+        self.max_charged_damage = 150  # Max damage
+        self.space_pressed_last_frame = False  # Track space key state
+        
+        # Shooting cooldown system
+        self.shoot_cooldown_timer = 0  # Cooldown timer in frames
+        self.shoot_cooldown_duration = 30  # 0.5 second cooldown at 60 FPS
         
         # Health system - 3 hearts
         self.max_hearts = 3
@@ -269,10 +421,15 @@ class Player:
         self.invulnerability_timer = 0
         self.invulnerability_duration = 60  # 1 second at 60 FPS
         
+        # Heart regeneration system
+        self.heart_regen_timer = 0.0  # Timer in seconds
+        self.heart_regen_time = 25.0  # Time needed to regenerate 1 heart (25 seconds)
+        
         # Teleport boost system
         self.boost_distance = 200.0
-        self.teleport_charges = 2
-        self.teleport_cooldown = 0
+        self.max_teleport_charges = 2
+        self.teleport_charges = [180, 180]  # Individual cooldown timers (180 = fully charged, 0 = empty)
+        self.teleport_cooldown_frames = 180  # Cooldown duration
         self.shift_pressed_last_frame = False
         
         # Load sounds
@@ -357,9 +514,9 @@ class Player:
             # This will be handled by handle_movement method
             pass
                 
-    def handle_movement(self, keys):
+    def handle_movement(self, keys, game_over=False):
         """Handle spaceship movement with WASD keys and space for shooting"""
-        if not self.active or self.phase != "centered":
+        if not self.active or self.phase != "centered" or game_over:
             return
         
         # Update invulnerability timer
@@ -367,6 +524,24 @@ class Player:
             self.invulnerability_timer -= 1
             if self.invulnerability_timer <= 0:
                 self.invulnerable = False
+        
+        # Update shooting cooldown timer
+        if self.shoot_cooldown_timer > 0:
+            self.shoot_cooldown_timer -= 1
+        
+        # Update heart regeneration timer
+        # Only regenerate if not at max hearts
+        if self.hearts < self.max_hearts:
+            # Assume 60 FPS - add 1/60 seconds per frame
+            self.heart_regen_timer += 1.0 / 60.0
+            
+            # Check if enough time has passed to regenerate a heart
+            if self.heart_regen_timer >= self.heart_regen_time:
+                self.hearts += 1
+                self.heart_regen_timer = 0.0  # Reset timer
+        else:
+            # At max hearts, reset timer
+            self.heart_regen_timer = 0.0
         
         # A/D keys change heading
         if keys[pygame.K_a]:
@@ -408,55 +583,96 @@ class Player:
         elif self.y > WINDOW_HEIGHT + self.radius:
             self.y = -self.radius
         
-        # Handle shooting (space key)
-        if self.shoot_cooldown > 0:
-            self.shoot_cooldown -= 1
+        # Handle charged shooting (space key)
+        space_currently_pressed = keys[pygame.K_SPACE]
+        
+        if space_currently_pressed:
+            if not self.is_charging:
+                # Start charging
+                self.is_charging = True
+                self.charge_time = 0.0
             
-        if keys[pygame.K_SPACE] and self.shoot_cooldown == 0:
-            # Create bullet at ship's nose
-            bullet_x = self.x + math.cos(self.angle) * (self.radius + 5)
-            bullet_y = self.y + math.sin(self.angle) * (self.radius + 5)
-            new_bullet = Bullet(bullet_x, bullet_y, self.angle)
-            self.bullets.append(new_bullet)
+            # Increment charge time
+            self.charge_time += 1/60.0  # 60 FPS
+            if self.charge_time > self.max_charge_time:
+                self.charge_time = self.max_charge_time
+        else:
+            # Space released - fire if we were charging and space was pressed last frame
+            if self.is_charging and self.space_pressed_last_frame:
+                # Check if cooldown has expired
+                if self.shoot_cooldown_timer <= 0:
+                    # Calculate damage based on charge time
+                    charge_progress = min(self.charge_time / self.max_charge_time, 1.0)
+                    damage = int(self.charged_damage + (self.max_charged_damage - self.charged_damage) * charge_progress)
+                    
+                    # Check if fully charged (95% or more charge = beam)
+                    is_fully_charged = charge_progress >= 0.95
+                    
+                    if is_fully_charged:
+                        # Create beam at ship's nose
+                        beam_x = self.x + math.cos(self.angle) * (self.radius + 5)
+                        beam_y = self.y + math.sin(self.angle) * (self.radius + 5)
+                        new_beam = Beam(beam_x, beam_y, self.angle, damage)
+                        self.beams.append(new_beam)
+                        
+                        # Apply recoil/knockback to player - push backwards
+                        recoil_force = 8.0  # Strong recoil for fully charged beam
+                        self.vel_x -= math.cos(self.angle) * recoil_force
+                        self.vel_y -= math.sin(self.angle) * recoil_force
+                    else:
+                        # Create bullet at ship's nose
+                        bullet_x = self.x + math.cos(self.angle) * (self.radius + 5)
+                        bullet_y = self.y + math.sin(self.angle) * (self.radius + 5)
+                        new_bullet = Bullet(bullet_x, bullet_y, self.angle, damage)
+                        self.bullets.append(new_bullet)
+                    
+                    # Start cooldown timer
+                    self.shoot_cooldown_timer = self.shoot_cooldown_duration
+                    
+                    # Play laser sound if available
+                    if self.laser_sound:
+                        self.laser_sound.play()
             
-            # Play laser sound if available
-            if self.laser_sound:
-                self.laser_sound.play()
-            
-            # Set cooldown
-            self.shoot_cooldown = self.max_shoot_cooldown
+            # Reset charging
+            self.is_charging = False
+            self.charge_time = 0.0
+        
+        # Update space state for next frame
+        self.space_pressed_last_frame = space_currently_pressed
         
         # Handle teleport boost (shift key)
-        # Update cooldown timer
-        if self.teleport_cooldown > 0:
-            self.teleport_cooldown -= 1
-            # Replenish charges when cooldown expires
-            if self.teleport_cooldown == 0:
-                self.teleport_charges = 2
+        # Update individual charge timers (recharge each charge independently)
+        for i in range(len(self.teleport_charges)):
+            if self.teleport_charges[i] < self.teleport_cooldown_frames:
+                self.teleport_charges[i] += 1
         
         # Check if shift is currently pressed
         shift_currently_pressed = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
         
         # Handle shift key teleport boost - only when first pressed and charges available
-        if shift_currently_pressed and not self.shift_pressed_last_frame and self.teleport_charges > 0:
-            # Boost in the direction ship is facing
-            boost_dx = math.cos(self.angle) * self.boost_distance
-            boost_dy = math.sin(self.angle) * self.boost_distance
+        if shift_currently_pressed and not self.shift_pressed_last_frame:
+            # Check if any charge is available (fully charged)
+            available_charge_index = -1
+            for i in range(len(self.teleport_charges)):
+                if self.teleport_charges[i] >= self.teleport_cooldown_frames:
+                    available_charge_index = i
+                    break
             
-            # Play warp sound if available
-            if self.warp_sound:
-                self.warp_sound.play()
-            
-            # Apply teleport boost
-            self.x += boost_dx
-            self.y += boost_dy
-            
-            # Use a charge
-            self.teleport_charges -= 1
-            
-            # Start cooldown if all charges used
-            if self.teleport_charges == 0:
-                self.teleport_cooldown = 180  # 3 seconds at 60fps
+            if available_charge_index >= 0:
+                # Boost in the direction ship is facing
+                boost_dx = math.cos(self.angle) * self.boost_distance
+                boost_dy = math.sin(self.angle) * self.boost_distance
+                
+                # Play warp sound if available
+                if self.warp_sound:
+                    self.warp_sound.play()
+                
+                # Apply teleport boost
+                self.x += boost_dx
+                self.y += boost_dy
+                
+                # Reset the used charge (start cooldown)
+                self.teleport_charges[available_charge_index] = 0
         
         # Update shift state for next frame
         self.shift_pressed_last_frame = shift_currently_pressed
@@ -467,6 +683,13 @@ class Player:
         
         # Remove inactive bullets
         self.bullets = [b for b in self.bullets if b.active]
+        
+        # Update beams
+        for beam in self.beams:
+            beam.update()
+        
+        # Remove inactive beams
+        self.beams = [b for b in self.beams if b.active]
     
     def take_damage(self):
         """Take damage and become invulnerable briefly"""
@@ -474,6 +697,8 @@ class Player:
             self.hearts -= 1
             self.invulnerable = True
             self.invulnerability_timer = self.invulnerability_duration
+            # Reset heart regeneration timer when taking damage
+            self.heart_regen_timer = 0.0
             return True
         return False
     
@@ -492,20 +717,51 @@ class Player:
             x = start_x + i * (heart_size + spacing)
             y = start_y
             
+            # Calculate fill progress
             if i < self.hearts:
-                # Draw filled heart (red)
-                color = (255, 0, 0)
+                fill_progress = 1.0
+            elif i == self.hearts and self.hearts < self.max_hearts:
+                fill_progress = self.heart_regen_timer / self.heart_regen_time
             else:
-                # Draw empty heart (gray)
-                color = (100, 100, 100)
+                fill_progress = 0.0
             
-            # Simple heart shape using circles and polygon
-            # Top circles
-            pygame.draw.circle(screen, color, (x, y + 10), 10)
-            pygame.draw.circle(screen, color, (x + 20, y + 10), 10)
-            # Bottom triangle
-            points = [(x, y + 15), (x + 10, y + 35), (x + 20, y + 15)]
-            pygame.draw.polygon(screen, color, points)
+            # Always draw empty heart outline first (like teleport charges)
+            outline_color = (100, 100, 100)
+            pygame.draw.circle(screen, outline_color, (x, y + 10), 10, width=2)
+            pygame.draw.circle(screen, outline_color, (x + 20, y + 10), 10, width=2)
+            outline_points = [(x, y + 15), (x + 10, y + 35), (x + 20, y + 15)]
+            pygame.draw.polygon(screen, outline_color, outline_points, width=2)
+            
+            # Draw filled portion based on progress
+            if fill_progress > 0:
+                # Calculate how much to shrink the filled heart based on progress
+                # When progress is 0, fill_radius = 0 (empty)
+                # When progress is 1, fill_radius = full (10)
+                fill_scale = fill_progress
+                
+                if fill_scale >= 1.0:
+                    # Fully filled
+                    pygame.draw.circle(screen, (255, 0, 0), (x, y + 10), 10)
+                    pygame.draw.circle(screen, (255, 0, 0), (x + 20, y + 10), 10)
+                    filled_points = [(x, y + 15), (x + 10, y + 35), (x + 20, y + 15)]
+                    pygame.draw.polygon(screen, (255, 0, 0), filled_points)
+                else:
+                    # Partially filled - draw scaled down version
+                    fill_radius = int(10 * fill_scale)
+                    fill_height = int(25 * fill_scale)  # Height of triangle portion
+                    if fill_radius > 0:
+                        # Blend color from gray to red based on progress
+                        red_intensity = int(100 + fill_progress * 155)
+                        blue_intensity = int(100 - fill_progress * 100)
+                        green_intensity = int(100 - fill_progress * 100)
+                        fill_color = (red_intensity, green_intensity, blue_intensity)
+                        
+                        pygame.draw.circle(screen, fill_color, (x, y + 10), fill_radius)
+                        pygame.draw.circle(screen, fill_color, (x + 20, y + 10), fill_radius)
+                        # Bottom triangle portion (scaled)
+                        filled_points = [(x, y + 15), (x + 10, y + 15 + fill_height), (x + 20, y + 15)]
+                        if fill_height > 0:
+                            pygame.draw.polygon(screen, fill_color, filled_points)
     
     def draw(self, screen):
         if self.active and self.phase == "centered":
@@ -532,6 +788,51 @@ class Player:
             
             pygame.draw.polygon(screen, self.color, points)
             pygame.draw.polygon(screen, WHITE, points, width=2)
+            
+            # Draw charge indicator when charging - at the front of the ship where bullet fires
+            if self.is_charging:
+                charge_progress = min(self.charge_time / self.max_charge_time, 1.0)
+                # Calculate position at ship's nose
+                charge_x = self.x + math.cos(self.angle) * (self.radius + 10)
+                charge_y = self.y + math.sin(self.angle) * (self.radius + 10)
+                
+                # Check if fully charged (ready for beam) - add pulsing effect
+                is_fully_charged = charge_progress >= 0.95
+                
+                if is_fully_charged:
+                    # Pulsing animation when ready for beam
+                    pulse_time = pygame.time.get_ticks() / 1000.0  # Time in seconds
+                    pulse = math.sin(pulse_time * 8.0) * 0.3 + 1.0  # Pulse between 0.7 and 1.3
+                    base_radius = 20  # Base radius for fully charged
+                    charge_radius = int(base_radius * pulse)
+                    # Bright cyan when fully charged
+                    r = 0
+                    g = 255
+                    b = 255
+                else:
+                    # Smaller expanding circle
+                    charge_radius = int(5 + charge_progress * 15)  # 5 to 20 pixels
+                    # Color changes from yellow to bright cyan as it charges
+                    r = int(255 - charge_progress * 155)
+                    g = int(255 - charge_progress * 55)
+                    b = 255
+                
+                # Draw outer circle
+                pygame.draw.circle(screen, (r, g, b), (int(charge_x), int(charge_y)), charge_radius, width=2)
+                
+                # Draw inner pulse - more intense when fully charged
+                if charge_progress > 0.3:
+                    if is_fully_charged:
+                        # Strong pulsing inner circle when ready for beam
+                        inner_pulse = math.sin(pulse_time * 10.0) * 0.4 + 1.0  # Faster pulse
+                        inner_radius = int(charge_radius * 0.7 * inner_pulse)
+                        # Bright white core when pulsing
+                        pygame.draw.circle(screen, (255, 255, 255), (int(charge_x), int(charge_y)), inner_radius)
+                        # Extra glow ring
+                        pygame.draw.circle(screen, (0, 255, 255), (int(charge_x), int(charge_y)), inner_radius + 3, width=1)
+                    else:
+                        inner_radius = int(charge_radius * 0.6)
+                        pygame.draw.circle(screen, (0, 255, 255), (int(charge_x), int(charge_y)), inner_radius, width=1)
         elif self.active:
             # Draw simple circle during transitions
             # Flash when invulnerable
@@ -543,6 +844,10 @@ class Player:
         # Draw bullets
         for bullet in self.bullets:
             bullet.draw(screen)
+        
+        # Draw beams (fully charged shots)
+        for beam in self.beams:
+            beam.draw(screen)
             
 class Snail:
     def __init__(self):
@@ -645,20 +950,84 @@ class Laser:
         if not self.active:
             return
             
-        PURPLE_WARNING = (128, 0, 255, 180)  # Add alpha value for transparency
-        PURPLE_ACTIVE = (128, 0, 255, 200)   # Add alpha value for transparency
+        # Orange color #fbaa1f
+        ORANGE_CENTER = (251, 170, 31)
+        ORANGE_WARNING = (251, 170, 31, 180)  # Add alpha value for transparency
+        ORANGE_ACTIVE = (251, 170, 31, 200)   # Add alpha value for transparency
         
         if self.warning:
-            # Draw warning laser (semi-transparent, thinner)
+            # Draw warning laser with gradient
             # Create a surface with per-pixel alpha
             laser_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-            pygame.draw.rect(laser_surface, PURPLE_WARNING, (0, 0, self.width, self.height))
+            
+            # Draw gradient from black edges to orange center
+            # For vertical lasers, gradient along width; for horizontal, along height
+            if self.vertical:
+                # Vertical laser - gradient along width
+                for i in range(self.width):
+                    dist_from_center = abs(i - self.width / 2) / (self.width / 2) if self.width > 0 else 0
+                    if dist_from_center < 0.5:
+                        factor = 1.0 - (dist_from_center * 1.5)
+                        factor = max(0.3, min(1.0, factor))
+                        r = int(251 * factor)
+                        g = int(170 * factor)
+                        b = int(31 * factor)
+                        color = (r, g, b, 180)
+                    else:
+                        color = (0, 0, 0, 180)
+                    pygame.draw.line(laser_surface, color, (i, 0), (i, self.height))
+            else:
+                # Horizontal laser - gradient along height
+                for i in range(self.height):
+                    dist_from_center = abs(i - self.height / 2) / (self.height / 2) if self.height > 0 else 0
+                    if dist_from_center < 0.5:
+                        factor = 1.0 - (dist_from_center * 1.5)
+                        factor = max(0.3, min(1.0, factor))
+                        r = int(251 * factor)
+                        g = int(170 * factor)
+                        b = int(31 * factor)
+                        color = (r, g, b, 180)
+                    else:
+                        color = (0, 0, 0, 180)
+                    pygame.draw.line(laser_surface, color, (0, i), (self.width, i))
+            
             screen.blit(laser_surface, (self.x, self.y))
         else:
-            # Draw active laser (semi-transparent, thicker)
+            # Draw active laser with gradient
             # Create a surface with per-pixel alpha
             laser_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-            pygame.draw.rect(laser_surface, PURPLE_ACTIVE, (0, 0, self.width, self.height))
+            
+            # Draw gradient from black edges to orange center
+            # For vertical lasers, gradient along width; for horizontal, along height
+            if self.vertical:
+                # Vertical laser - gradient along width
+                for i in range(self.width):
+                    dist_from_center = abs(i - self.width / 2) / (self.width / 2) if self.width > 0 else 0
+                    if dist_from_center < 0.5:
+                        factor = 1.0 - (dist_from_center * 1.5)
+                        factor = max(0.3, min(1.0, factor))
+                        r = int(251 * factor)
+                        g = int(170 * factor)
+                        b = int(31 * factor)
+                        color = (r, g, b, 200)
+                    else:
+                        color = (0, 0, 0, 200)
+                    pygame.draw.line(laser_surface, color, (i, 0), (i, self.height))
+            else:
+                # Horizontal laser - gradient along height
+                for i in range(self.height):
+                    dist_from_center = abs(i - self.height / 2) / (self.height / 2) if self.height > 0 else 0
+                    if dist_from_center < 0.5:
+                        factor = 1.0 - (dist_from_center * 1.5)
+                        factor = max(0.3, min(1.0, factor))
+                        r = int(251 * factor)
+                        g = int(170 * factor)
+                        b = int(31 * factor)
+                        color = (r, g, b, 200)
+                    else:
+                        color = (0, 0, 0, 200)
+                    pygame.draw.line(laser_surface, color, (0, i), (self.width, i))
+            
             screen.blit(laser_surface, (self.x, self.y))
             
     def check_collision(self, player):
@@ -696,7 +1065,7 @@ class PowerBall:
         
         # Arc trajectory
         self.t = 0  # Progress along arc (0 to 1)
-        self.speed = 0.02  # How fast to travel the arc
+        self.speed = 0.01  # How fast to travel the arc (slower for better gameplay)
         
         # Calculate arc height
         mid_x = (start_x + target_x) / 2
@@ -846,6 +1215,8 @@ class Boss:
         self.powerballs = []
         self.powerball_wave = 0  # Track which wave (0-2, 3 waves total)
         self.last_powerball_wave_time = 0
+        self.is_launching_powerballs = False  # Track when boss shows mad sprite for powerball launch
+        self.powerball_launch_timer = 0  # Timer for powerball launch mad sprite
         
         # Phase 1 AI: Laser shooting (10s) -> Wander (1s) -> Chase player (10s) -> PowerBall (10s) -> repeat
         self.phase1_mode = "shooting"  # "shooting" or "wandering" or "chasing" or "powerball"
@@ -950,6 +1321,8 @@ class Boss:
         self.powerball_wave = 0
         self.last_powerball_wave_time = 0
         self.last_charge_time = -10  # Start with negative so first charge can happen quickly
+        self.is_launching_powerballs = False  # Reset powerball launch state
+        self.powerball_launch_timer = 0  # Reset powerball launch timer
         
     def spawn_laser(self):
         """Spawn a random laser"""
@@ -965,11 +1338,17 @@ class Boss:
             
         self.lasers.append(Laser(is_vertical, position))
         
-    def update(self, is_talking=False, player=None):
-        if not self.active:
+    def update(self, is_talking=False, player=None, frozen=False):
+        if not self.active or frozen:
             return
             
         current_time = pygame.time.get_ticks() / 1000.0
+        
+        # Calculate health percentage
+        health_percentage = self.health / self.max_health if self.max_health > 0 else 1.0
+        
+        # Speed multiplier based on health: 2x faster at 25% health
+        speed_multiplier = 2.0 if health_percentage <= 0.25 else 1.0
         
         # Only update during boss fight (not during talking)
         # Boss doesn't move or shoot until dialogue is done
@@ -988,8 +1367,8 @@ class Boss:
                     self.wander_timer += 1
                     
                     # Move in current wander direction
-                    self.x += math.cos(self.wander_direction) * self.wander_speed
-                    self.y += math.sin(self.wander_direction) * self.wander_speed
+                    self.x += math.cos(self.wander_direction) * self.wander_speed * speed_multiplier
+                    self.y += math.sin(self.wander_direction) * self.wander_speed * speed_multiplier
                     
                     # Check boundaries and bounce off walls
                     boss_radius = 150
@@ -1013,8 +1392,18 @@ class Boss:
                         self.wander_timer = 0
                         self.wander_change_interval = random.randint(90, 150)
                     
-                    # Shooting mode: 10 seconds
-                    if time_in_mode > 10.0:
+                    # At 50% health or below, always have lasers spawning and skip to chase/powerball cycle
+                    # Shooting mode: 10 seconds (unless health <= 50%)
+                    if health_percentage <= 0.5:
+                        # Skip wandering and shooting modes, go straight to chasing
+                        if time_in_mode > 2.0:  # Short window for lasers to spawn
+                            # Switch to chasing mode
+                            self.phase1_mode = "chasing"
+                            self.phase1_mode_start_time = current_time
+                            self.wander_timer = 0
+                            # Keep lasers active (don't clear them)
+                            self.last_charge_time = -10
+                    elif time_in_mode > 10.0:
                         # Switch to wandering mode
                         self.phase1_mode = "wandering"
                         self.phase1_mode_start_time = current_time
@@ -1023,7 +1412,13 @@ class Boss:
                         self.lasers = []
                     
                     # Spawn lasers during shooting mode
-                    if time_in_mode > 3.0:  # Start spawning after 3 seconds
+                    # At 50% health or below, always keep spawning lasers
+                    if health_percentage <= 0.5:
+                        # Always keep lasers spawning when below 50%
+                        time_for_next_laser = 1.0 + len(self.lasers) * self.laser_spawn_interval * 0.6  # More frequent
+                        if time_in_mode >= time_for_next_laser and len(self.lasers) < 15:  # More lasers at once
+                            self.spawn_laser()
+                    elif time_in_mode > 3.0:  # Start spawning after 3 seconds
                         time_for_next_laser = 3.0 + len(self.lasers) * self.laser_spawn_interval
                         if time_in_mode >= time_for_next_laser and len(self.lasers) < 10:
                             self.spawn_laser()
@@ -1033,8 +1428,8 @@ class Boss:
                     self.wander_timer += 1
                     
                     # Move in current wander direction
-                    self.x += math.cos(self.wander_direction) * self.wander_speed
-                    self.y += math.sin(self.wander_direction) * self.wander_speed
+                    self.x += math.cos(self.wander_direction) * self.wander_speed * speed_multiplier
+                    self.y += math.sin(self.wander_direction) * self.wander_speed * speed_multiplier
                     
                     # Check boundaries and bounce off walls
                     boss_radius = 150
@@ -1067,8 +1462,11 @@ class Boss:
                         self.last_charge_time = -10  # Reset charge timer for chase mode
                             
                 elif self.phase1_mode == "chasing":
-                    # Chasing mode: 10 seconds, then switch to powerball mode
-                    if time_in_mode > 10.0:
+                    # At 50% health, chase for shorter duration (5 seconds) to cycle faster
+                    chase_duration = 5.0 if health_percentage <= 0.5 else 10.0
+                    
+                    # Chasing mode: 10 seconds (or 5 seconds if health <= 50%), then switch to powerball mode
+                    if time_in_mode > chase_duration:
                         # Switch to powerball mode
                         self.phase1_mode = "powerball"
                         self.phase1_mode_start_time = current_time
@@ -1094,8 +1492,8 @@ class Boss:
                                 move_y = dy / distance
                                 
                                 # Move toward player
-                                self.x += move_x * self.chase_speed
-                                self.y += move_y * self.chase_speed
+                                self.x += move_x * self.chase_speed * speed_multiplier
+                                self.y += move_y * self.chase_speed * speed_multiplier
                                 
                                 # Keep boss within bounds (allow to go further down when chasing)
                                 self.x = max(150, min(WINDOW_WIDTH - 150, self.x))
@@ -1134,7 +1532,13 @@ class Boss:
                                 self.charge_direction_x = math.cos(random_angle)
                                 self.charge_direction_y = math.sin(random_angle)
                     
-                    elif self.is_charging:
+                    # Spawn lasers during chase mode when health is <= 50%
+                    if health_percentage <= 0.5:
+                        time_for_next_laser = 1.0 + len(self.lasers) * self.laser_spawn_interval * 0.6  # More frequent
+                        if time_in_mode >= time_for_next_laser and len(self.lasers) < 15:  # More lasers at once
+                            self.spawn_laser()
+                    
+                    if self.is_charging:
                         # Charging state: boss stops and shows mad sprite
                         self.charge_timer += 1
                         if self.charge_timer >= self.charge_duration:
@@ -1150,8 +1554,8 @@ class Boss:
                     
                     elif self.is_launching:
                         # Launching state: boss moves fast toward target
-                        self.x += self.charge_direction_x * self.charge_launch_speed
-                        self.y += self.charge_direction_y * self.charge_launch_speed
+                        self.x += self.charge_direction_x * self.charge_launch_speed * speed_multiplier
+                        self.y += self.charge_direction_y * self.charge_launch_speed * speed_multiplier
                         
                         # Keep boss within bounds (allow to go further down when charging)
                         self.x = max(150, min(WINDOW_WIDTH - 150, self.x))
@@ -1171,12 +1575,23 @@ class Boss:
                             self.launch_timer = 0
                 
                 elif self.phase1_mode == "powerball":
-                    # PowerBall phase: Summon 6 powerballs that arc to player's last location
-                    # 10 seconds total
-                    if time_in_mode > 10.0:
-                        # Switch back to shooting mode
-                        self.phase1_mode = "shooting"
-                        self.phase1_mode_start_time = current_time
+                    # At 50% health, powerball for shorter duration (5 seconds) to cycle faster
+                    powerball_duration = 5.0 if health_percentage <= 0.5 else 10.0
+                    
+                    # PowerBall phase: Summon powerballs that arc to player's last location
+                    # 10 seconds total (or 5 seconds if health <= 50%)
+                    if time_in_mode > powerball_duration:
+                        # At 50% health, cycle back to chasing mode instead of shooting
+                        if health_percentage <= 0.5:
+                            # Switch back to chasing mode (keep lasers active)
+                            self.phase1_mode = "chasing"
+                            self.phase1_mode_start_time = current_time
+                            self.last_charge_time = -10
+                        else:
+                            # Switch back to shooting mode
+                            self.phase1_mode = "shooting"
+                            self.phase1_mode_start_time = current_time
+                        
                         self.powerball_wave = 0
                         self.last_powerball_wave_time = 0
                         # Force clear all powerballs and reset charging states
@@ -1194,8 +1609,8 @@ class Boss:
                     self.wander_timer += 1
                     
                     # Move in current wander direction
-                    self.x += math.cos(self.wander_direction) * self.wander_speed
-                    self.y += math.sin(self.wander_direction) * self.wander_speed
+                    self.x += math.cos(self.wander_direction) * self.wander_speed * speed_multiplier
+                    self.y += math.sin(self.wander_direction) * self.wander_speed * speed_multiplier
                     
                     # Check boundaries and bounce off walls
                     boss_radius = 150
@@ -1219,8 +1634,15 @@ class Boss:
                         self.wander_timer = 0
                         self.wander_change_interval = random.randint(30, 60)
                     
+                    # Spawn lasers during powerball mode when health is <= 50%
+                    if health_percentage <= 0.5:
+                        time_for_next_laser = 1.0 + len(self.lasers) * self.laser_spawn_interval * 0.6  # More frequent
+                        if time_in_mode >= time_for_next_laser and len(self.lasers) < 15:  # More lasers at once
+                            self.spawn_laser()
+                    
                     # Spawn powerballs continuously throughout the phase (but stop 1 second before phase ends)
-                    if player and time_in_mode < 9.0:  # Stop spawning in the last 1 second
+                    spawn_cutoff = powerball_duration - 1.0  # Stop spawning 1 second before phase ends
+                    if player and time_in_mode < spawn_cutoff:
                         # Check if it's time to spawn the next wave (every 1 second: spawn immediately, then wander for 1 sec)
                         wave_spawn_interval = 1.0  # 1 second between each spawn
                         
@@ -1239,6 +1661,17 @@ class Boss:
                             
                             self.powerball_wave += 1  # Keep track of wave count but don't limit it
                             self.last_powerball_wave_time = time_in_mode
+                            
+                            # Show mad sprite for 0.5 seconds when launching powerballs
+                            self.is_launching_powerballs = True
+                            self.powerball_launch_timer = 0
+                    
+                    # Update powerball launch timer
+                    if self.is_launching_powerballs:
+                        self.powerball_launch_timer += 1
+                        # Show mad sprite for 0.5 seconds (30 frames at 60 FPS)
+                        if self.powerball_launch_timer >= 30:
+                            self.is_launching_powerballs = False
                     
                     # Update powerballs
                     for powerball in self.powerballs:
@@ -1321,7 +1754,7 @@ class Boss:
         except:
             pass
         
-    def draw(self, screen):
+    def draw(self, screen, rotation=0, scale=1.0):
         if self.active:
             # Draw all lasers
             for laser in self.lasers:
@@ -1331,8 +1764,8 @@ class Boss:
             for powerball in self.powerballs:
                 powerball.draw(screen)
                 
-            # Show mad sprite when charging or launching
-            if self.is_charging or self.is_launching:
+            # Show mad sprite when charging, launching, or launching powerballs
+            if self.is_charging or self.is_launching or self.is_launching_powerballs:
                 if self.image_mad:
                     image_rect = self.image_mad.get_rect(center=(self.x, self.y))
                     screen.blit(self.image_mad, image_rect)
@@ -1342,8 +1775,17 @@ class Boss:
                     pygame.draw.circle(screen, WHITE, (self.x, self.y), 100, width=3)
             else:
                 if self.image:
-                    image_rect = self.image.get_rect(center=(self.x, self.y))
-                    screen.blit(self.image, image_rect)
+                    if rotation != 0 or scale != 1.0:
+                        # Apply rotation and scale for defeat animation
+                        rotated_image = pygame.transform.rotate(self.image, rotation)
+                        rotated_image = pygame.transform.scale(rotated_image, 
+                                                               (int(rotated_image.get_width() * scale), 
+                                                                int(rotated_image.get_height() * scale)))
+                        image_rect = rotated_image.get_rect(center=(self.x, self.y))
+                        screen.blit(rotated_image, image_rect)
+                    else:
+                        image_rect = self.image.get_rect(center=(self.x, self.y))
+                        screen.blit(self.image, image_rect)
                 else:
                     # Draw placeholder if image didn't load
                     pygame.draw.circle(screen, RED, (self.x, self.y), 100)
@@ -1418,6 +1860,17 @@ class AstroSlayerGame:
         self.boss_typing_index = 0  # Current character index
         self.boss_typing_timer = 0  # Timer for typing delay
         self.boss_talking_sound_played = False  # Track if talking sound has been played
+        
+        # Boss defeat/victory sequence
+        self.boss_defeated = False  # Track if boss has been defeated
+        self.boss_defeat_sequence = None  # "dialogue", "spinning", "victory"
+        self.boss_defeat_timer = 0  # Timer for defeat sequence
+        self.boss_defeat_text = "Oh no"  # Defeat dialogue text
+        self.boss_defeat_typed_text = ""  # Currently displayed defeat text
+        self.boss_defeat_typing_index = 0  # Current character index for defeat dialogue
+        self.boss_defeat_typing_timer = 0  # Timer for defeat typing delay
+        self.boss_rotation = 0  # Boss rotation angle for spinning animation
+        self.victory_shown = False  # Track if victory screen has been shown
         
         # Pre-boss typing text
         self.pre_boss_text_active = False  # Track if showing pre-boss text
@@ -1647,6 +2100,33 @@ class AstroSlayerGame:
                     
                     break  # Bullet destroyed, move to next bullet
         
+        # Check beam-asteroid collisions
+        for beam in self.player.beams:
+            if not beam.active:
+                continue
+            for asteroid in self.asteroids[:]:  # Copy list to allow removal
+                if asteroid.active and asteroid.id not in beam.hit_targets:
+                    if beam.check_collision_point(asteroid.x, asteroid.y, asteroid.radius):
+                        # Mark asteroid as hit (beam can hit multiple targets)
+                        beam.hit_targets.add(asteroid.id)
+                        # Destroy asteroid
+                        asteroid.active = False
+                        
+                        # Add score based on asteroid size
+                        self.score += asteroid.value
+                        
+                        # Create smaller asteroids if this was a large or medium asteroid
+                        if asteroid.size == "large":
+                            # Create 2 medium asteroids at the destroyed asteroid's position
+                            for _ in range(2):
+                                new_asteroid = Asteroid(asteroid.x, asteroid.y, "medium")
+                                self.asteroids.append(new_asteroid)
+                        elif asteroid.size == "medium":
+                            # Create 2 small asteroids at destroyed asteroid's position
+                            for _ in range(2):
+                                new_asteroid = Asteroid(asteroid.x, asteroid.y, "small")
+                                self.asteroids.append(new_asteroid)
+        
         # Remove inactive asteroids
         self.asteroids = [a for a in self.asteroids if a.active]
         
@@ -1657,6 +2137,9 @@ class AstroSlayerGame:
             self.pre_boss_typing_index = 0
             self.pre_boss_typing_timer = 0
             self.pre_boss_text_display_timer = 0
+            
+            # Fade out ingame music when last meteoroid is destroyed
+            pygame.mixer.music.fadeout(3000)  # Fade out over 3 seconds
         
         # Check ship-asteroid collisions
         if not self.game_over:
@@ -1712,11 +2195,57 @@ class AstroSlayerGame:
                 boss_radius = 150  # Boss hitbox radius
                 
                 if distance < (boss_radius + bullet.radius):
-                    # Bullet hits boss - deal 5 damage
+                    # Bullet hits boss - deal damage based on charge
                     bullet.active = False
-                    self.boss.health -= 5
+                    self.boss.health -= bullet.damage
                     if self.boss.health < 0:
                         self.boss.health = 0
+                        
+                        # Trigger boss defeat sequence if not already triggered
+                        if not self.boss_defeated and self.boss.active:
+                            self.boss_defeated = True
+                            self.boss_defeat_sequence = "dialogue"
+                            self.boss_defeat_timer = 0
+                            self.boss_defeat_typed_text = ""
+                            self.boss_defeat_typing_index = 0
+                            # Clear all boss attacks
+                            self.boss.lasers = []
+                            self.boss.powerballs = []
+                            self.boss.is_charging = False
+                            self.boss.is_launching = False
+                            # Stop boss from moving
+                            self.boss._defeat_frozen = True
+        
+        # Check beam-boss collisions
+        if not self.game_over and self.boss.active and not self.boss_intro_active:
+            boss_radius = 150  # Boss hitbox radius
+            boss_id = id(self.boss)
+            for beam in self.player.beams:
+                if not beam.active:
+                    continue
+                # Check if beam hits boss (only once per beam)
+                if boss_id not in beam.hit_targets:
+                    if beam.check_collision_point(self.boss.x, self.boss.y, boss_radius):
+                        # Beam hits boss - deal damage
+                        beam.hit_targets.add(boss_id)
+                        self.boss.health -= beam.damage
+                        if self.boss.health < 0:
+                            self.boss.health = 0
+                            
+                            # Trigger boss defeat sequence if not already triggered
+                            if not self.boss_defeated and self.boss.active:
+                                self.boss_defeated = True
+                                self.boss_defeat_sequence = "dialogue"
+                                self.boss_defeat_timer = 0
+                                self.boss_defeat_typed_text = ""
+                                self.boss_defeat_typing_index = 0
+                                # Clear all boss attacks
+                                self.boss.lasers = []
+                                self.boss.powerballs = []
+                                self.boss.is_charging = False
+                                self.boss.is_launching = False
+                                # Stop boss from moving
+                                self.boss._defeat_frozen = True
         
         # Check powerball collisions with player
         if not self.game_over and self.boss.active and not self.boss_intro_active:
@@ -1788,13 +2317,96 @@ class AstroSlayerGame:
             asteroid.draw(self.screen)
     
     def draw_score(self):
-        """Draw the score on screen"""
+        """Draw the score on screen (right side)"""
         score_text = f"SCORE: {self.score}"
         try:
-            font = pygame.font.Font(None, 72)
-            text_surface = font.render(score_text, True, WHITE)
-            self.screen.blit(text_surface, (50, 50))
+            # Create pixelated text by rendering at small size then scaling up
+            small_font = pygame.font.Font(None, 12)  # Small font for pixelation
+            small_surface = small_font.render(score_text, True, WHITE)
+            # Scale up 6x to create pixelated effect (12 * 6 = 72)
+            text_surface = pygame.transform.scale(small_surface, 
+                                                   (small_surface.get_width() * 6, 
+                                                    small_surface.get_height() * 6))
+            # Position on right side
+            text_x = WINDOW_WIDTH - text_surface.get_width() - 50
+            self.screen.blit(text_surface, (text_x, 50))
         except:
+            pass
+    
+    def draw_teleport_charges(self):
+        """Draw teleport charges as blue circles below hearts"""
+        if not self.player.active or self.player.phase != "centered":
+            return
+            
+        # Calculate position below hearts (hearts are at y=20, height ~45)
+        indicator_y = 75  # Below the hearts
+        start_x = 20  # Same x position as hearts start
+        circle_spacing = 35  # Space between charge circles
+        circle_radius = 15
+        
+        # Draw up to 2 teleport charges
+        for i in range(len(self.player.teleport_charges)):
+            x = start_x + i * circle_spacing
+            center = (x + circle_radius, indicator_y)
+            
+            charge_timer = self.player.teleport_charges[i]
+            max_cooldown = self.player.teleport_cooldown_frames
+            
+            # Check if charge is fully charged
+            if charge_timer >= max_cooldown:
+                # Filled blue circle (available charge)
+                pygame.draw.circle(self.screen, (0, 150, 255), center, circle_radius)
+                pygame.draw.circle(self.screen, (0, 200, 255), center, circle_radius, width=2)
+            else:
+                # Recharging - draw partial fill based on progress
+                progress = charge_timer / max_cooldown
+                
+                # Draw empty background
+                pygame.draw.circle(self.screen, (30, 30, 30), center, circle_radius)
+                pygame.draw.circle(self.screen, (80, 80, 80), center, circle_radius, width=2)
+                
+                # Draw partial fill if there's progress
+                if progress > 0:
+                    # Calculate how much of the circle to fill
+                    fill_radius = int(circle_radius * progress)
+                    if fill_radius > 0:
+                        # Draw filled portion - gradient from gray to blue
+                        blue_intensity = int(50 + progress * 205)
+                        pygame.draw.circle(self.screen, (0, 100, blue_intensity), center, fill_radius)
+    
+    def handle_boss_defeat_sequence(self):
+        """Handle the boss defeat sequence: dialogue -> spinning -> victory"""
+        if self.boss_defeat_sequence == "dialogue":
+            # Type out "Oh no" dialogue
+            self.boss_defeat_typing_timer += 1
+            if self.boss_defeat_typing_timer >= 8:  # Typing speed
+                if self.boss_defeat_typing_index < len(self.boss_defeat_text):
+                    self.boss_defeat_typed_text += self.boss_defeat_text[self.boss_defeat_typing_index]
+                    self.boss_defeat_typing_index += 1
+                    self.boss_defeat_typing_timer = 0
+            
+            # After typing completes and shown for 1.5 seconds, move to spinning
+            if self.boss_defeat_typing_index >= len(self.boss_defeat_text):
+                self.boss_defeat_timer += 1
+                if self.boss_defeat_timer >= 90:  # 1.5 seconds at 60 FPS
+                    self.boss_defeat_sequence = "spinning"
+                    self.boss_defeat_timer = 0
+                    self.boss_rotation = 0
+        
+        elif self.boss_defeat_sequence == "spinning":
+            # Spin the boss into the void
+            self.boss_rotation += 0.3  # Spin speed
+            # Shrink the boss as it spins
+            self.boss_defeat_timer += 1
+            
+            # After 2 seconds of spinning, show victory screen
+            if self.boss_defeat_timer >= 120:  # 2 seconds at 60 FPS
+                self.boss_defeat_sequence = "victory"
+                self.boss_defeat_timer = 0
+                self.victory_shown = True
+        
+        elif self.boss_defeat_sequence == "victory":
+            # Victory screen is shown
             pass
     
     def draw_game_over(self):
@@ -1802,18 +2414,87 @@ class AstroSlayerGame:
         if not self.game_over:
             return
         
-        game_over_text = "GAME OVER"
+        game_over_text = "GAME OVER DUDE"
         try:
-            font = pygame.font.Font(None, 144)
-            text_surface = font.render(game_over_text, True, RED)
+            # Create pixelated text by rendering at small size then scaling up
+            # This creates the pixelated effect
+            small_font = pygame.font.Font(None, 16)  # Small font for pixelation
+            small_surface = small_font.render(game_over_text, True, RED)
+            # Scale up 9x to create pixelated effect (16 * 9 = 144)
+            text_surface = pygame.transform.scale(small_surface, 
+                                                   (small_surface.get_width() * 9, 
+                                                    small_surface.get_height() * 9))
             text_rect = text_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 50))
             self.screen.blit(text_surface, text_rect)
             
             final_score_text = f"FINAL SCORE: {self.score}"
-            score_font = pygame.font.Font(None, 72)
-            score_surface = score_font.render(final_score_text, True, WHITE)
+            # Create pixelated text
+            small_score_font = pygame.font.Font(None, 12)  # Small font for pixelation
+            small_score_surface = small_score_font.render(final_score_text, True, WHITE)
+            # Scale up 6x to create pixelated effect (12 * 6 = 72)
+            score_surface = pygame.transform.scale(small_score_surface,
+                                                     (small_score_surface.get_width() * 6,
+                                                      small_score_surface.get_height() * 6))
             score_rect = score_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 100))
             self.screen.blit(score_surface, score_rect)
+        except:
+            pass
+    
+    def draw_victory_screen(self):
+        """Draw victory message similar to game over"""
+        if not self.victory_shown:
+            return
+        
+        victory_text = "VICTORY"
+        try:
+            # Create pixelated text by rendering at small size then scaling up
+            # This creates the pixelated effect
+            small_font = pygame.font.Font(None, 16)  # Small font for pixelation
+            small_surface = small_font.render(victory_text, True, YELLOW)
+            # Scale up 9x to create pixelated effect (16 * 9 = 144)
+            text_surface = pygame.transform.scale(small_surface, 
+                                                   (small_surface.get_width() * 9, 
+                                                    small_surface.get_height() * 9))
+            text_rect = text_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 50))
+            self.screen.blit(text_surface, text_rect)
+            
+            final_score_text = f"FINAL SCORE: {self.score}"
+            # Create pixelated text
+            small_score_font = pygame.font.Font(None, 12)  # Small font for pixelation
+            small_score_surface = small_score_font.render(final_score_text, True, WHITE)
+            # Scale up 6x to create pixelated effect (12 * 6 = 72)
+            score_surface = pygame.transform.scale(small_score_surface,
+                                                     (small_score_surface.get_width() * 6,
+                                                      small_score_surface.get_height() * 6))
+            score_rect = score_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 100))
+            self.screen.blit(score_surface, score_rect)
+        except:
+            pass
+    
+    def draw_boss_defeat_dialogue(self):
+        """Draw boss defeat dialogue"""
+        if not self.boss_defeated or self.boss_defeat_sequence != "dialogue":
+            return
+        
+        # Draw semi-transparent black overlay
+        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        overlay.set_alpha(180)
+        overlay.fill(BLACK)
+        self.screen.blit(overlay, (0, 0))
+        
+        # Draw dialogue box at bottom
+        dialogue_box_y = int(WINDOW_HEIGHT * 0.75)
+        dialogue_box_height = int(WINDOW_HEIGHT * 0.25)
+        pygame.draw.rect(self.screen, WHITE, (0, dialogue_box_y, WINDOW_WIDTH, dialogue_box_height))
+        pygame.draw.rect(self.screen, BLACK, (10, dialogue_box_y + 10, WINDOW_WIDTH - 20, dialogue_box_height - 20))
+        
+        # Draw typed text
+        try:
+            font = pygame.font.Font(None, 72)
+            text_surface = font.render(self.boss_defeat_typed_text, True, WHITE)
+            text_x = 50
+            text_y = dialogue_box_y + 50
+            self.screen.blit(text_surface, (text_x, text_y))
         except:
             pass
     
@@ -2155,7 +2836,7 @@ class AstroSlayerGame:
             
             # Handle player movement with WASD keys
             if self.transition_state == "ready":
-                self.player.handle_movement(keys)
+                self.player.handle_movement(keys, self.game_over)
                 
                 # Debug key: 'i' to kill all asteroids
                 if keys[pygame.K_i]:
@@ -2243,6 +2924,9 @@ class AstroSlayerGame:
                     self.pre_boss_typing_timer = 0
                     self.pre_boss_text_display_timer = 0
                     pygame.mixer.music.set_volume(1.0)  # Reset music volume
+                    
+                    # Reset player teleport charges
+                    self.player.teleport_charges = [180, 180]  # Both fully charged
                         
             # Draw based on current state
             if state == "menu":
@@ -2252,13 +2936,35 @@ class AstroSlayerGame:
                     self.draw_asteroids()
                     # Only update/draw boss if it's active (score >= 1000)
                     if self.boss.active:
-                        self.boss.update(is_talking=self.boss_intro_active, player=self.player)  # Pass whether boss is talking
-                        self.boss.draw(self.screen)
+                        # Handle boss defeat sequence
+                        if self.boss_defeated and self.boss_defeat_sequence:
+                            self.handle_boss_defeat_sequence()
+                            frozen = True
+                        else:
+                            frozen = False
+                        
+                        self.boss.update(is_talking=self.boss_intro_active, player=self.player, frozen=frozen)  # Pass whether boss is talking and if frozen
+                        
+                        # Handle boss drawing based on defeat sequence
+                        if self.boss_defeated and self.boss_defeat_sequence == "dialogue":
+                            self.boss.draw(self.screen, rotation=0, scale=1.0)
+                            self.draw_boss_defeat_dialogue()
+                        elif self.boss_defeated and self.boss_defeat_sequence == "spinning":
+                            # Calculate shrink scale
+                            shrink_progress = self.boss_defeat_timer / 120.0
+                            scale = max(0.1, 1.0 - shrink_progress * 0.9)  # Shrink from 1.0 to 0.1
+                            self.boss.draw(self.screen, rotation=self.boss_rotation, scale=scale)
+                        elif self.boss_defeated and self.boss_defeat_sequence == "victory":
+                            self.draw_victory_screen()
+                        else:
+                            self.boss.draw(self.screen)
+                        
                         self.boss.draw_health_bar(self.screen)
                     self.draw_score()
                     # Draw player hearts
                     if self.player.active and self.player.phase == "centered":
                         self.player.draw_hearts(self.screen)
+                        self.draw_teleport_charges()
                     # Draw pre-boss text if active
                     if self.pre_boss_text_active:
                         self.draw_pre_boss_text()
