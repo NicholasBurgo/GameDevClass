@@ -1608,25 +1608,41 @@ class Boss:
                     # Wandering behavior during powerball phase
                     self.wander_timer += 1
                     
-                    # Move in current wander direction
-                    self.x += math.cos(self.wander_direction) * self.wander_speed * speed_multiplier
-                    self.y += math.sin(self.wander_direction) * self.wander_speed * speed_multiplier
-                    
-                    # Check boundaries and bounce off walls
+                    # Check boundaries first - only constrain movement if boss would go out of bounds
                     boss_radius = 150
                     min_x = boss_radius
                     max_x = WINDOW_WIDTH - boss_radius
                     min_y = boss_radius
-                    max_y = WINDOW_HEIGHT // 2 + 50
+                    # Don't restrict max_y - let boss stay where it is and shoot from there
                     
-                    # Bounce off walls
-                    if self.x < min_x or self.x > max_x:
+                    # Calculate where boss would move
+                    next_x = self.x + math.cos(self.wander_direction) * self.wander_speed * speed_multiplier
+                    next_y = self.y + math.sin(self.wander_direction) * self.wander_speed * speed_multiplier
+                    
+                    # Only apply movement and bounce if it would go out of bounds, otherwise just move
+                    if next_x < min_x or next_x > max_x:
                         self.wander_direction = math.pi - self.wander_direction
-                        self.x = max(min_x, min(max_x, self.x))
+                        # Only clamp if it actually goes out of bounds
+                        if self.x < min_x:
+                            self.x = min_x
+                        elif self.x > max_x:
+                            self.x = max_x
+                        else:
+                            # Boss is still in bounds, just reverse direction for next frame
+                            self.x += math.cos(self.wander_direction) * self.wander_speed * speed_multiplier
+                    else:
+                        self.x = next_x
                     
-                    if self.y < min_y or self.y > max_y:
+                    # Only check bottom boundary for Y, not top (let boss be anywhere vertically)
+                    if next_y < min_y:
                         self.wander_direction = -self.wander_direction
-                        self.y = max(min_y, min(max_y, self.y))
+                        if self.y < min_y:
+                            self.y = min_y
+                        else:
+                            # Boss is still in bounds, just reverse direction for next frame
+                            self.y += math.sin(self.wander_direction) * self.wander_speed * speed_multiplier
+                    else:
+                        self.y = next_y
                     
                     # Change wandering direction periodically (after bouncing or randomly)
                     if self.wander_timer >= self.wander_change_interval:
@@ -1871,6 +1887,7 @@ class AstroSlayerGame:
         self.boss_defeat_typing_timer = 0  # Timer for defeat typing delay
         self.boss_rotation = 0  # Boss rotation angle for spinning animation
         self.victory_shown = False  # Track if victory screen has been shown
+        self.boss_points_awarded = False  # Track if 500 points have been awarded for boss defeat
         
         # Pre-boss typing text
         self.pre_boss_text_active = False  # Track if showing pre-boss text
@@ -2404,10 +2421,60 @@ class AstroSlayerGame:
                 self.boss_defeat_sequence = "victory"
                 self.boss_defeat_timer = 0
                 self.victory_shown = True
+                # Award 500 points when transitioning to victory (only once)
+                if not self.boss_points_awarded:
+                    self.score += 500
+                    self.boss_points_awarded = True
         
         elif self.boss_defeat_sequence == "victory":
-            # Victory screen is shown
-            pass
+            # Show victory screen for 3 seconds, then return to asteroid area
+            self.boss_defeat_timer += 1
+            if self.boss_defeat_timer >= 180:  # 3 seconds at 60 FPS
+                # Reset boss state
+                self.boss.active = False
+                self.boss.start()  # Reset boss health and state
+                
+                # Reset all boss-related flags
+                self.boss_defeated = False
+                self.boss_defeat_sequence = None
+                self.boss_defeat_timer = 0
+                self.boss_defeat_typed_text = ""
+                self.boss_defeat_typing_index = 0
+                self.boss_defeat_typing_timer = 0
+                self.boss_rotation = 0
+                self.victory_shown = False
+                self.boss_points_awarded = False
+                
+                # Reset boss intro flags
+                self.boss_intro_shown = False
+                self.boss_intro_active = False
+                self.boss_intro_timer = 0
+                self.boss_flash_timer = 0
+                self.boss_music_played = False
+                self.boss_typed_text = ""
+                self.boss_typing_index = 0
+                self.boss_typing_timer = 0
+                self.boss_talking_sound_played = False
+                
+                # Reset pre-boss text flags
+                self.pre_boss_text_active = False
+                self.pre_boss_typed_text = ""
+                self.pre_boss_typing_index = 0
+                self.pre_boss_typing_timer = 0
+                self.pre_boss_text_display_timer = 0
+                
+                # Spawn new asteroids
+                self.spawn_asteroids()
+                
+                # Fade out battle music and start ingame music
+                pygame.mixer.music.fadeout(1000)  # Fade out battle music over 1 second
+                # Load and play ingame music after fadeout
+                if self.ingame_music_path:
+                    try:
+                        pygame.mixer.music.load(self.ingame_music_path)
+                        pygame.mixer.music.play(-1)  # Loop ingame music
+                    except Exception as e:
+                        print(f"Could not load ingame music: {e}")
     
     def draw_game_over(self):
         """Draw game over message"""
