@@ -1894,6 +1894,7 @@ class AstroSlayerGame:
         self.boss_rotation = 0  # Boss rotation angle for spinning animation
         self.victory_shown = False  # Track if victory screen has been shown
         self.boss_points_awarded = False  # Track if 500 points have been awarded for boss defeat
+        self.boss_fight_completed = False  # Track if boss has been defeated at least once
         
         # Pre-boss typing text
         self.pre_boss_text_active = False  # Track if showing pre-boss text
@@ -1994,6 +1995,13 @@ class AstroSlayerGame:
         self.asteroids = []
         for _ in range(self.NUM_ASTEROIDS):
             self.asteroids.append(Asteroid())
+
+    def spawn_boss_directly(self):
+        """Spawn the boss directly without intro sequence"""
+        print("All asteroids destroyed! Spawning boss directly...")
+        self.boss.active = True
+        self.boss.start()  # Initialize boss health and state
+        self.boss_intro_shown = True  # Skip intro since we've done it before
     
     def update_game(self):
         """Update game logic - asteroids, collisions, scoring"""
@@ -2153,10 +2161,15 @@ class AstroSlayerGame:
         # Remove inactive asteroids
         self.asteroids = [a for a in self.asteroids if a.active]
         
-        # Check if all asteroids are destroyed and trigger pre-boss text
-        if len(self.asteroids) == 0 and not self.boss_intro_shown and not self.boss_intro_active and not self.pre_boss_text_active:
-            self.pre_boss_text_active = True
-            self.pre_boss_typed_text = ""
+        # Check if all asteroids are destroyed
+        if len(self.asteroids) == 0:
+            if self.boss_fight_completed:
+                # If we've defeated the boss before, spawn boss directly
+                self.spawn_boss_directly()
+            elif not self.boss_intro_shown and not self.boss_intro_active and not self.pre_boss_text_active:
+                # First time - trigger pre-boss text
+                self.pre_boss_text_active = True
+                self.pre_boss_typed_text = ""
             self.pre_boss_typing_index = 0
             self.pre_boss_typing_timer = 0
             self.pre_boss_text_display_timer = 0
@@ -2422,15 +2435,31 @@ class AstroSlayerGame:
             # Shrink the boss as it spins
             self.boss_defeat_timer += 1
             
-            # After 2 seconds of spinning, show victory screen
+            # After 2 seconds of spinning, return to asteroid gameplay (no victory screen)
             if self.boss_defeat_timer >= 120:  # 2 seconds at 60 FPS
-                self.boss_defeat_sequence = "victory"
-                self.boss_defeat_timer = 0
-                self.victory_shown = True
-                # Award 500 points when transitioning to victory (only once)
+                # Award 500 points for boss defeat
                 if not self.boss_points_awarded:
                     self.score += 500
                     self.boss_points_awarded = True
+
+                # Reset boss state and return to asteroid gameplay
+                self.boss.active = False
+
+                # Reset all boss-related flags
+                self.boss_defeated = False
+                self.boss_defeat_sequence = None
+                self.boss_defeat_timer = 0
+                self.boss_defeat_typed_text = ""
+                self.boss_defeat_typing_index = 0
+                self.boss_defeat_typing_timer = 0
+                self.boss_rotation = 0
+                self.victory_shown = False
+                self.boss_points_awarded = False
+
+                # Respawn asteroids for continued gameplay
+                self.spawn_asteroids()
+                self.boss_fight_completed = True  # Mark that we've completed at least one boss fight
+                print("Boss defeated! Returning to asteroid gameplay...")
         
         elif self.boss_defeat_sequence == "victory":
             # Show victory screen for 3 seconds, then return to asteroid area
@@ -2949,6 +2978,16 @@ class AstroSlayerGame:
                 if keys[pygame.K_i]:
                     self.asteroids = []
                     print("Debug: All asteroids destroyed!")
+
+                # Debug key: 'h' to give player 100 damage (instant death)
+                if keys[pygame.K_h]:
+                    self.player.hearts = 0
+                    print("Debug: Player took 100 damage - instant death!")
+
+                # Debug key: 'o' to instant kill boss during boss battle only
+                if keys[pygame.K_o] and self.boss.active:
+                    self.boss.health = 0
+                    print("Debug: Boss instant killed during boss battle!")
                 
                 # Update game logic
                 self.update_game()
@@ -3030,6 +3069,7 @@ class AstroSlayerGame:
                     self.pre_boss_typing_index = 0
                     self.pre_boss_typing_timer = 0
                     self.pre_boss_text_display_timer = 0
+                    self.boss_fight_completed = False  # Reset boss fight completion flag
                     pygame.mixer.music.set_volume(1.0)  # Reset music volume
                     
                     # Reset player teleport charges
@@ -3061,8 +3101,6 @@ class AstroSlayerGame:
                             shrink_progress = self.boss_defeat_timer / 120.0
                             scale = max(0.1, 1.0 - shrink_progress * 0.9)  # Shrink from 1.0 to 0.1
                             self.boss.draw(self.virtual_surface, rotation=self.boss_rotation, scale=scale)
-                        elif self.boss_defeated and self.boss_defeat_sequence == "victory":
-                            self.draw_victory_screen()
                         else:
                             self.boss.draw(self.virtual_surface)
 
