@@ -15,14 +15,16 @@ def main():
     mode = int(input("Enter choice: "))
 
     while True:
-        print("To play type (Top|Mid|Bottom) followed by (Left|Mid|Right)")
         if ply == 1:
             if mode == 1:
+                print("To play type (Top|Mid|Bottom) followed by (Left|Mid|Right)")
                 move = input("Player one make a move: ")
             else:
+                print("To play type (Top|Mid|Bottom) followed by (Left|Mid|Right)")
                 move = input("Player one make a move: ")
         else:
             if mode == 1:
+                print("To play type (Top|Mid|Bottom) followed by (Left|Mid|Right)")
                 move = input("Player two make a move: ")
             else:
                 print("Computer's turn")
@@ -30,6 +32,11 @@ def main():
 
         # Convert move to coordinates
         row, col = convert_move(move)
+
+        # Validate converted coordinates
+        if row == -1 or col == -1:
+            print("Invalid input! Use format like 'top left', 'mid mid', 'bottom right'.")
+            continue
 
         # Make move
         if b[row][col] == 0:
@@ -74,25 +81,29 @@ def main():
 
 def convert_move(move):
     """Convert text move to row, col coordinates"""
-    move = move.lower().strip()
+    text = move.lower().strip()
+    tokens = text.split()
     row = -1
     col = -1
 
-    # Handle row
-    if "top" in move:
-        row = 0
-    elif "middle" in move:
-        row = 1
-    elif "bottom" in move:
-        row = 2
+    row_map = {
+        "top": 0, "upper": 0, "up": 0,
+        "mid": 1, "middle": 1, "center": 1, "centre": 1,
+        "bottom": 2, "bot": 2, "down": 2, "lower": 2
+    }
+    col_map = {
+        "left": 0, "l": 0,
+        "mid": 1, "middle": 1, "center": 1, "centre": 1,
+        "right": 2, "r": 2
+    }
 
-    # Handle column
-    if "left" in move:
-        col = 0
-    elif "mid" in move:
-        col = 1
-    elif "right" in move:
-        col = 2
+    for tok in tokens:
+        if row == -1 and tok in row_map:
+            row = row_map[tok]
+            continue
+        if col == -1 and tok in col_map:
+            col = col_map[tok]
+            continue
 
     return row, col
 
@@ -159,7 +170,7 @@ def get_computer_move(b):
     if empty:
         move = random.choice(empty)
         return convert_to_text(move[0], move[1])
-    return "mid middle"
+    return "mid mid"
 
 def convert_to_text(row, col):
     """Convert coordinates to text move"""

@@ -5,3 +5,53 @@ Laser, metorid physics, and main menu gameplay like supersmash bros // not happe
 have 1 boss fight at the end
 (use laser from lua dodgeGame)
 Have a loss screen saying that the player isnt good using mario themed music
+
+—
+ok new plan: loopy game flow
+  metorid area -> kill all -> boss talks (flash) -> fight -> beat boss -> back to metorid
+  repeat repeat until idk score gets big
+
+remember: "metorid" not "asteroid" (lol)
+
+notes while hacking:
+- bullets dmg 30, charge shot turns into BEAM when full (feels good)
+- metorid sizes: large/med/small split into smaller ones when destroyed
+- score adds per metorid size (check values again?)
+
+boss stuff
+- health 1000
+- phases: wandering/shooting/chasing/powerball
+- lasers with warning (sound) then ZAP
+- powerballs = projectile spam, show mad face when launching
+- after defeat: dialogue "Oh no" then spin and shrink (looks sick)
+- IMPORTANT: give +500 pts on boss defeat (only once), then respawn metorids
+
+music todo-ish
+- opening -> ingame -> battle -> back to ingame
+- fade out on last metorid before boss text (done)
+- after victory wait a sec then ingame again (done-ish, check fade)
+
+rough edges
+- make sure boss deactivates during metorid phase (don’t chase ghost boss)
+- beam width vs boss hitbox (tweak?)
+- menu: play button works, transitions speed up/slow down okay
+
+random:
+- snail parallax still funny
+- teleport charges regen indiv. (keep)
+- hearts ui: regen bar fill on next heart (nice)
+
+future maybe (if time):
+- different metorid sprites? rotate faster? idc
+- second boss? nah
+
+DONE checklist (kinda):
+[x] boss defeat sequence
+[x] +500 points on boss defeat
+[x] respawn metorids after victory
+[x] loop back to metorid area
+[x] music swap back to ingame after boss
+
+
+Main loop
+Kill all metorids -> boss -> metorids -> boss etc

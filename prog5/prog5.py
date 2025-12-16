@@ -10,8 +10,8 @@ pygame.init()
 # Constants
 WINDOW_WIDTH = 2100
 WINDOW_HEIGHT = 1350
-STAR_COUNT = 150  # Balanced star count
-STAR_SPEED = 2
+STAR_COUNT = 150
+STAR_SPEED = 4
 
 # Colors
 BLACK = (0, 0, 0)
@@ -1809,9 +1809,15 @@ class Boss:
 
 class AstroSlayerGame:
     def __init__(self):
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
         pygame.display.set_caption("ASTRO SLAYER")
         self.clock = pygame.time.Clock()
+
+        # Scaling system for resizable window
+        self.scale_x = 1.0
+        self.scale_y = 1.0
+        self.scale_factor = 1.0
+        self.virtual_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
         # Load different fonts for title and button
         # Title font - pixelated retro gaming style
         # Create pixelated font by using a small font scaled up
@@ -1973,15 +1979,15 @@ class AstroSlayerGame:
         # Update and draw all stars
         for star in self.stars:
             star.update(speed_multiplier)
-            star.draw(self.screen)
-        
+            star.draw(self.virtual_surface)
+
         # Update and draw snail with speed multiplier
         self.snail.update(speed_multiplier)
-        self.snail.draw(self.screen)
+        self.snail.draw(self.virtual_surface)
         
         # Update and draw player - pass transition state so it knows when to stop
         self.player.update(speed_multiplier, self.transition_state)
-        self.player.draw(self.screen)
+        self.player.draw(self.virtual_surface)
     
     def spawn_asteroids(self):
         """Initialize asteroids"""
@@ -2331,7 +2337,7 @@ class AstroSlayerGame:
     def draw_asteroids(self):
         """Draw all asteroids"""
         for asteroid in self.asteroids:
-            asteroid.draw(self.screen)
+            asteroid.draw(self.virtual_surface)
     
     def draw_score(self):
         """Draw the score on screen (right side)"""
@@ -2346,7 +2352,7 @@ class AstroSlayerGame:
                                                     small_surface.get_height() * 6))
             # Position on right side
             text_x = WINDOW_WIDTH - text_surface.get_width() - 50
-            self.screen.blit(text_surface, (text_x, 50))
+            self.virtual_surface.blit(text_surface, (text_x, 50))
         except:
             pass
     
@@ -2372,16 +2378,16 @@ class AstroSlayerGame:
             # Check if charge is fully charged
             if charge_timer >= max_cooldown:
                 # Filled blue circle (available charge)
-                pygame.draw.circle(self.screen, (0, 150, 255), center, circle_radius)
-                pygame.draw.circle(self.screen, (0, 200, 255), center, circle_radius, width=2)
+                pygame.draw.circle(self.virtual_surface, (0, 150, 255), center, circle_radius)
+                pygame.draw.circle(self.virtual_surface, (0, 200, 255), center, circle_radius, width=2)
             else:
                 # Recharging - draw partial fill based on progress
                 progress = charge_timer / max_cooldown
-                
+
                 # Draw empty background
-                pygame.draw.circle(self.screen, (30, 30, 30), center, circle_radius)
-                pygame.draw.circle(self.screen, (80, 80, 80), center, circle_radius, width=2)
-                
+                pygame.draw.circle(self.virtual_surface, (30, 30, 30), center, circle_radius)
+                pygame.draw.circle(self.virtual_surface, (80, 80, 80), center, circle_radius, width=2)
+
                 # Draw partial fill if there's progress
                 if progress > 0:
                     # Calculate how much of the circle to fill
@@ -2389,7 +2395,7 @@ class AstroSlayerGame:
                     if fill_radius > 0:
                         # Draw filled portion - gradient from gray to blue
                         blue_intensity = int(50 + progress * 205)
-                        pygame.draw.circle(self.screen, (0, 100, blue_intensity), center, fill_radius)
+                        pygame.draw.circle(self.virtual_surface, (0, 100, blue_intensity), center, fill_radius)
     
     def handle_boss_defeat_sequence(self):
         """Handle the boss defeat sequence: dialogue -> spinning -> victory"""
@@ -2492,7 +2498,7 @@ class AstroSlayerGame:
                                                    (small_surface.get_width() * 9, 
                                                     small_surface.get_height() * 9))
             text_rect = text_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 50))
-            self.screen.blit(text_surface, text_rect)
+            self.virtual_surface.blit(text_surface, text_rect)
             
             final_score_text = f"FINAL SCORE: {self.score}"
             # Create pixelated text
@@ -2503,7 +2509,7 @@ class AstroSlayerGame:
                                                      (small_score_surface.get_width() * 6,
                                                       small_score_surface.get_height() * 6))
             score_rect = score_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 100))
-            self.screen.blit(score_surface, score_rect)
+            self.virtual_surface.blit(score_surface, score_rect)
         except:
             pass
     
@@ -2523,7 +2529,7 @@ class AstroSlayerGame:
                                                    (small_surface.get_width() * 9, 
                                                     small_surface.get_height() * 9))
             text_rect = text_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 50))
-            self.screen.blit(text_surface, text_rect)
+            self.virtual_surface.blit(text_surface, text_rect)
             
             final_score_text = f"FINAL SCORE: {self.score}"
             # Create pixelated text
@@ -2534,7 +2540,7 @@ class AstroSlayerGame:
                                                      (small_score_surface.get_width() * 6,
                                                       small_score_surface.get_height() * 6))
             score_rect = score_surface.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 100))
-            self.screen.blit(score_surface, score_rect)
+            self.virtual_surface.blit(score_surface, score_rect)
         except:
             pass
     
@@ -2547,13 +2553,13 @@ class AstroSlayerGame:
         overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
         overlay.set_alpha(180)
         overlay.fill(BLACK)
-        self.screen.blit(overlay, (0, 0))
+        self.virtual_surface.blit(overlay, (0, 0))
         
         # Draw dialogue box at bottom
         dialogue_box_y = int(WINDOW_HEIGHT * 0.75)
         dialogue_box_height = int(WINDOW_HEIGHT * 0.25)
-        pygame.draw.rect(self.screen, WHITE, (0, dialogue_box_y, WINDOW_WIDTH, dialogue_box_height))
-        pygame.draw.rect(self.screen, BLACK, (10, dialogue_box_y + 10, WINDOW_WIDTH - 20, dialogue_box_height - 20))
+        pygame.draw.rect(self.virtual_surface, WHITE, (0, dialogue_box_y, WINDOW_WIDTH, dialogue_box_height))
+        pygame.draw.rect(self.virtual_surface, BLACK, (10, dialogue_box_y + 10, WINDOW_WIDTH - 20, dialogue_box_height - 20))
         
         # Draw typed text
         try:
@@ -2561,7 +2567,7 @@ class AstroSlayerGame:
             text_surface = font.render(self.boss_defeat_typed_text, True, WHITE)
             text_x = 50
             text_y = dialogue_box_y + 50
-            self.screen.blit(text_surface, (text_x, text_y))
+            self.virtual_surface.blit(text_surface, (text_x, text_y))
         except:
             pass
     
@@ -2584,9 +2590,9 @@ class AstroSlayerGame:
                 screen_with_alpha = pygame.Surface(glow_surface.get_size(), pygame.SRCALPHA)
                 screen_with_alpha.set_alpha(50 // (i+1))
                 screen_with_alpha.blit(glow_surface, (0, 0))
-                self.screen.blit(screen_with_alpha, glow_rect)
+                self.virtual_surface.blit(screen_with_alpha, glow_rect)
             
-            self.screen.blit(text_surface, text_rect)
+            self.virtual_surface.blit(text_surface, text_rect)
         except:
             pass
     
@@ -2599,24 +2605,24 @@ class AstroSlayerGame:
         if self.boss_flash_timer > 0:
             # Draw boss and lasers during flash
             if self.boss.active:
-                self.boss.draw(self.screen)
+                self.boss.draw(self.virtual_surface)
             # Calculate alpha based on remaining time (fade out)
             alpha = int(255 * (self.boss_flash_timer / 30))
             flash = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
             flash.set_alpha(alpha)
             flash.fill(WHITE)
-            self.screen.blit(flash, (0, 0))
+            self.virtual_surface.blit(flash, (0, 0))
             return  # Don't draw dialogue during flash
         
         # Draw boss and lasers before overlay
         if self.boss.active:
-            self.boss.draw(self.screen)
+            self.boss.draw(self.virtual_surface)
         
         # Draw semi-transparent black overlay
         overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
         overlay.set_alpha(180)
         overlay.fill(BLACK)
-        self.screen.blit(overlay, (0, 0))
+        self.virtual_surface.blit(overlay, (0, 0))
         
         # Undertale-themed dialogue
         dialogue = [
@@ -2640,10 +2646,10 @@ class AstroSlayerGame:
             
             # Draw text box
             box_rect = pygame.Rect(WINDOW_WIDTH // 2 - 400, WINDOW_HEIGHT // 2, 800, 200)
-            pygame.draw.rect(self.screen, WHITE, box_rect, width=4)
-            pygame.draw.rect(self.screen, BLACK, pygame.Rect(box_rect.x + 4, box_rect.y + 4, box_rect.width - 8, box_rect.height - 8))
+            pygame.draw.rect(self.virtual_surface, WHITE, box_rect, width=4)
+            pygame.draw.rect(self.virtual_surface, BLACK, pygame.Rect(box_rect.x + 4, box_rect.y + 4, box_rect.width - 8, box_rect.height - 8))
             
-            self.screen.blit(text_surface, text_rect)
+            self.virtual_surface.blit(text_surface, text_rect)
             
             # Boss sprite always uses BossT.png
             # Don't update boss during intro - just draw it
@@ -2682,7 +2688,7 @@ class AstroSlayerGame:
                                                 0))
                 shadow_rect = shadow.get_rect(center=(WINDOW_WIDTH // 2 + offset, 
                                                        250 + offset))
-                self.screen.blit(shadow, shadow_rect)
+                self.virtual_surface.blit(shadow, shadow_rect)
                 
                 # Cyan glow
                 cyan_glow = render_pixelated_text(title_text, 
@@ -2690,7 +2696,7 @@ class AstroSlayerGame:
                                                    255 // (i+1)))
                 cyan_rect = cyan_glow.get_rect(center=(WINDOW_WIDTH // 2 - offset, 
                                                         250 - offset))
-                self.screen.blit(cyan_glow, cyan_rect)
+                self.virtual_surface.blit(cyan_glow, cyan_rect)
             
             # Main title text - bright white
             main_title = render_pixelated_text(title_text, (255, 255, 255))
@@ -2703,13 +2709,13 @@ class AstroSlayerGame:
                         outline = render_pixelated_text(title_text, (0, 0, 0))
                         outline_rect = outline.get_rect(center=(WINDOW_WIDTH // 2 + dx, 
                                                                  250 + dy))
-                        self.screen.blit(outline, outline_rect)
+                        self.virtual_surface.blit(outline, outline_rect)
             
             # Main title text - white
             main_title = render_pixelated_text(title_text, (255, 255, 255))
         
         main_rect = main_title.get_rect(center=(WINDOW_WIDTH // 2, 250))
-        self.screen.blit(main_title, main_rect)
+        self.virtual_surface.blit(main_title, main_rect)
         
     def draw_countdown(self):
         # Helper function to render and scale text for pixelation
@@ -2770,16 +2776,16 @@ class AstroSlayerGame:
             glow = render_pixelated_text(text_to_show, glow_color)
             glow.set_alpha(alpha // (i+1))
             glow_rect = glow.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
-            self.screen.blit(glow, glow_rect)
+            self.virtual_surface.blit(glow, glow_rect)
         
         # Main text - bright white
         main_text = render_pixelated_text(text_to_show, WHITE)
         main_text.set_alpha(alpha)
         main_rect = main_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
-        self.screen.blit(main_text, main_rect)
+        self.virtual_surface.blit(main_text, main_rect)
         
     def draw_menu(self):
-        self.screen.fill(BLACK)
+        self.virtual_surface.fill(BLACK)
         
         # Draw starfield with speed multiplier
         self.draw_starfield(self.starfield_speed)
@@ -2797,7 +2803,19 @@ class AstroSlayerGame:
         
         # Draw Play button only if not in transition
         if self.transition_state == "none":
-            mouse_pos = pygame.mouse.get_pos()
+            # Transform mouse coordinates from screen space to virtual surface space
+            screen_mouse_pos = pygame.mouse.get_pos()
+            screen_width, screen_height = self.screen.get_size()
+            scaled_width = int(WINDOW_WIDTH * self.scale_factor)
+            scaled_height = int(WINDOW_HEIGHT * self.scale_factor)
+            offset_x = (screen_width - scaled_width) // 2
+            offset_y = (screen_height - scaled_height) // 2
+
+            # Convert screen mouse position to virtual surface coordinates
+            virtual_mouse_x = (screen_mouse_pos[0] - offset_x) / self.scale_factor
+            virtual_mouse_y = (screen_mouse_pos[1] - offset_y) / self.scale_factor
+            mouse_pos = (virtual_mouse_x, virtual_mouse_y)
+
             play_rect = pygame.Rect(WINDOW_WIDTH // 2 - 150, WINDOW_HEIGHT // 2 + 150, 300, 80)
             
             # Button pulsing effect synchronized with title flash
@@ -2828,13 +2846,13 @@ class AstroSlayerGame:
                     red_glow = pygame.Rect(WINDOW_WIDTH // 2 - 150 - i, WINDOW_HEIGHT // 2 + 150 - i, 
                                             300 + i*2, 80 + i*2)
                     red_color = (255 // (i+2), 100 // (i+2), 0)
-                    pygame.draw.rect(self.screen, red_color, red_glow, width=2, border_radius=15)
-                    
+                    pygame.draw.rect(self.virtual_surface, red_color, red_glow, width=2, border_radius=15)
+
                     # Cyan glow
-                    cyan_glow = pygame.Rect(WINDOW_WIDTH // 2 - 150 + i, WINDOW_HEIGHT // 2 + 150 + i, 
+                    cyan_glow = pygame.Rect(WINDOW_WIDTH // 2 - 150 + i, WINDOW_HEIGHT // 2 + 150 + i,
                                             300 + i*2, 80 + i*2)
                     cyan_color = (0, 255 // (i+2), 255 // (i+2))
-                    pygame.draw.rect(self.screen, cyan_color, cyan_glow, width=2, border_radius=15)
+                    pygame.draw.rect(self.virtual_surface, cyan_color, cyan_glow, width=2, border_radius=15)
             
             # Draw only the border ring (transparent center)
             # Add black outline when not flashing (like title)
@@ -2843,11 +2861,11 @@ class AstroSlayerGame:
                 for dx in range(-2, 3):
                     for dy in range(-2, 3):
                         if dx != 0 or dy != 0:
-                            outline_rect = pygame.Rect(WINDOW_WIDTH // 2 - 150 + dx, WINDOW_HEIGHT // 2 + 150 + dy, 
+                            outline_rect = pygame.Rect(WINDOW_WIDTH // 2 - 150 + dx, WINDOW_HEIGHT // 2 + 150 + dy,
                                                        300, 80)
-                            pygame.draw.rect(self.screen, (0, 0, 0), outline_rect, width=8, border_radius=15)
-            
-            pygame.draw.rect(self.screen, border_color, play_rect, width=8, border_radius=15)
+                            pygame.draw.rect(self.virtual_surface, (0, 0, 0), outline_rect, width=8, border_radius=15)
+
+            pygame.draw.rect(self.virtual_surface, border_color, play_rect, width=8, border_radius=15)
             
             # Render pixelated button text (1980s style)
             if self.use_button_pixel:
@@ -2861,7 +2879,7 @@ class AstroSlayerGame:
                 play_text = self.font_button_small.render("PLAY", True, text_color)
             
             play_text_rect = play_text.get_rect(center=play_rect.center)
-            self.screen.blit(play_text, play_text_rect)
+            self.virtual_surface.blit(play_text, play_text_rect)
             
             return play_rect
         else:
@@ -2878,28 +2896,50 @@ class AstroSlayerGame:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                    
+
+                elif event.type == pygame.VIDEORESIZE:
+                    # Handle window resize - update display surface and scaling factors
+                    self.screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+                    # Calculate scaling factors to maintain aspect ratio
+                    self.scale_x = event.w / WINDOW_WIDTH
+                    self.scale_y = event.h / WINDOW_HEIGHT
+                    # Use the minimum scale to maintain aspect ratio and fit entirely
+                    self.scale_factor = min(self.scale_x, self.scale_y)
+
                 if event.type == pygame.MOUSEBUTTONDOWN and self.transition_state == "none":
                     play_rect = self.draw_menu()
-                    if play_rect and play_rect.collidepoint(event.pos):
-                        # Play select sound if available
-                        if self.select_sound:
-                            self.select_sound.play()
-                            print("Playing select sound!")
-                        else:
-                            print("Select sound not loaded!")
-                        
-                        # Stop opening music
-                        pygame.mixer.music.stop()
-                        
-                        # Start transition
-                        self.transition_state = "speeding_up"
-                        self.transition_timer = 0
-                        self.starfield_speed = 1.0
-                        self.countdown_timer = 360  # Reset countdown to 6 seconds (with 0.5s delay before countdown starts)
-                        self.prev_countdown_text = None  # Reset to ensure sound plays for first countdown
-                        self.snail.start()  # Start snail animation
-                        print("Transition Started!")
+                    if play_rect:
+                        # Transform mouse coordinates from screen space to virtual surface space
+                        screen_width, screen_height = self.screen.get_size()
+                        scaled_width = int(WINDOW_WIDTH * self.scale_factor)
+                        scaled_height = int(WINDOW_HEIGHT * self.scale_factor)
+                        offset_x = (screen_width - scaled_width) // 2
+                        offset_y = (screen_height - scaled_height) // 2
+
+                        # Convert screen mouse position to virtual surface coordinates
+                        virtual_mouse_x = (event.pos[0] - offset_x) / self.scale_factor
+                        virtual_mouse_y = (event.pos[1] - offset_y) / self.scale_factor
+                        virtual_mouse_pos = (virtual_mouse_x, virtual_mouse_y)
+
+                        if play_rect.collidepoint(virtual_mouse_pos):
+                            # Play select sound if available
+                            if self.select_sound:
+                                self.select_sound.play()
+                                print("Playing select sound!")
+                            else:
+                                print("Select sound not loaded!")
+
+                            # Stop opening music
+                            pygame.mixer.music.stop()
+
+                            # Start transition
+                            self.transition_state = "speeding_up"
+                            self.transition_timer = 0
+                            self.starfield_speed = 1.0
+                            self.countdown_timer = 360  # Reset countdown to 6 seconds (with 0.5s delay before countdown starts)
+                            self.prev_countdown_text = None  # Reset to ensure sound plays for first countdown
+                            self.snail.start()  # Start snail animation
+                            print("Transition Started!")
             
             # Handle player movement with WASD keys
             if self.transition_state == "ready":
@@ -3014,23 +3054,23 @@ class AstroSlayerGame:
                         
                         # Handle boss drawing based on defeat sequence
                         if self.boss_defeated and self.boss_defeat_sequence == "dialogue":
-                            self.boss.draw(self.screen, rotation=0, scale=1.0)
+                            self.boss.draw(self.virtual_surface, rotation=0, scale=1.0)
                             self.draw_boss_defeat_dialogue()
                         elif self.boss_defeated and self.boss_defeat_sequence == "spinning":
                             # Calculate shrink scale
                             shrink_progress = self.boss_defeat_timer / 120.0
                             scale = max(0.1, 1.0 - shrink_progress * 0.9)  # Shrink from 1.0 to 0.1
-                            self.boss.draw(self.screen, rotation=self.boss_rotation, scale=scale)
+                            self.boss.draw(self.virtual_surface, rotation=self.boss_rotation, scale=scale)
                         elif self.boss_defeated and self.boss_defeat_sequence == "victory":
                             self.draw_victory_screen()
                         else:
-                            self.boss.draw(self.screen)
-                        
-                        self.boss.draw_health_bar(self.screen)
+                            self.boss.draw(self.virtual_surface)
+
+                        self.boss.draw_health_bar(self.virtual_surface)
                     self.draw_score()
                     # Draw player hearts
                     if self.player.active and self.player.phase == "centered":
-                        self.player.draw_hearts(self.screen)
+                        self.player.draw_hearts(self.virtual_surface)
                         self.draw_teleport_charges()
                     # Draw pre-boss text if active
                     if self.pre_boss_text_active:
@@ -3041,14 +3081,29 @@ class AstroSlayerGame:
                     if self.game_over:
                         self.draw_game_over()
             else:
-                # Drawing game screen  
-                self.screen.fill(BLACK)
+                # Drawing game screen
+                self.virtual_surface.fill(BLACK)
                 self.draw_starfield(self.starfield_speed)
-                
+
                 game_text = self.font_medium.render("Game In Progress...", True, WHITE)
                 game_rect = game_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
-                self.screen.blit(game_text, game_rect)
-            
+                self.virtual_surface.blit(game_text, game_rect)
+
+            # Scale and blit virtual surface to actual screen for resizable window support
+            if self.scale_factor != 1.0:
+                scaled_surface = pygame.transform.scale(self.virtual_surface,
+                                                      (int(WINDOW_WIDTH * self.scale_factor),
+                                                       int(WINDOW_HEIGHT * self.scale_factor)))
+                # Center the scaled surface in the window
+                screen_width, screen_height = self.screen.get_size()
+                scaled_width, scaled_height = scaled_surface.get_size()
+                offset_x = (screen_width - scaled_width) // 2
+                offset_y = (screen_height - scaled_height) // 2
+                self.screen.blit(scaled_surface, (offset_x, offset_y))
+            else:
+                # No scaling needed, just blit directly
+                self.screen.blit(self.virtual_surface, (0, 0))
+
             pygame.display.flip()
             self.clock.tick(60)
             
