@@ -2679,9 +2679,7 @@ class AstroSlayerGame:
             pygame.draw.rect(self.virtual_surface, BLACK, pygame.Rect(box_rect.x + 4, box_rect.y + 4, box_rect.width - 8, box_rect.height - 8))
             
             self.virtual_surface.blit(text_surface, text_rect)
-            
-            # Boss sprite always uses BossT.png
-            # Don't update boss during intro - just draw it
+
         except:
             pass
                             
@@ -2760,9 +2758,7 @@ class AstroSlayerGame:
             else:
                 return self.font_title.render(text, True, color)
         
-        # Determine which text to show based on timer
-        # Total: 360 frames (6 seconds). Timeline: 0.5s delay (360-330) -> evenly spaced countdown
-        # Countdown: 330 frames split into 4 parts: 82, 82, 82, 84 frames each
+
         text_to_show = None
         
         if self.countdown_timer > 330:  # 0.5s delay (first 30 frames)
@@ -2865,7 +2861,6 @@ class AstroSlayerGame:
                     border_color = WHITE  # White like title default
                     text_color = WHITE
             
-            # Draw button with pulsing effect - TRANSPARENT CENTER, JUST RING
             if flash_on:
                 # Draw glow effect when flashing (outer rings) - match title colors
                 for i in range(8):
@@ -2882,9 +2877,7 @@ class AstroSlayerGame:
                                             300 + i*2, 80 + i*2)
                     cyan_color = (0, 255 // (i+2), 255 // (i+2))
                     pygame.draw.rect(self.virtual_surface, cyan_color, cyan_glow, width=2, border_radius=15)
-            
-            # Draw only the border ring (transparent center)
-            # Add black outline when not flashing (like title)
+
             if not flash_on:
                 # Draw black outline in all directions for retro effect
                 for dx in range(-2, 3):
@@ -2960,14 +2953,12 @@ class AstroSlayerGame:
 
                             # Stop opening music
                             pygame.mixer.music.stop()
-
-                            # Start transition
                             self.transition_state = "speeding_up"
                             self.transition_timer = 0
                             self.starfield_speed = 1.0
-                            self.countdown_timer = 360  # Reset countdown to 6 seconds (with 0.5s delay before countdown starts)
-                            self.prev_countdown_text = None  # Reset to ensure sound plays for first countdown
-                            self.snail.start()  # Start snail animation
+                            self.countdown_timer = 360  
+                            self.prev_countdown_text = None 
+                            self.snail.start() 
                             print("Transition Started!")
             
             # Handle player movement with WASD keys
@@ -3008,7 +2999,6 @@ class AstroSlayerGame:
                     self.transition_timer = 0
                     
             elif self.transition_state == "fast":
-                # Stay fast for 270 frames (4.5 seconds) - extended to match countdown duration
                 self.transition_timer += 1
                 self.starfield_speed = 10.0
                 
@@ -3016,7 +3006,7 @@ class AstroSlayerGame:
                 if self.countdown_timer > 0:
                     self.countdown_timer -= 1
                 
-                # Start player 60 frames (1 second) earlier so it looks slower compared to starfield
+
                 if self.transition_timer == 180 and not self.player.active:
                     self.player.start()
                     
@@ -3025,33 +3015,28 @@ class AstroSlayerGame:
                     self.transition_timer = 0
                     
             elif self.transition_state == "slowing_down":
-                # Slow down over 60 frames (1 second)
                 self.transition_timer += 1
                 
-                # Update countdown timer
                 if self.countdown_timer > 0:
                     self.countdown_timer -= 1
                     
                 if self.transition_timer < 60:
                     progress = self.transition_timer / 60
-                    self.starfield_speed = 10.0 - (progress * 9.9)  # Slow from 10x to 0.1x
+                    self.starfield_speed = 10.0 - (progress * 9.9)
                 else:
                     self.transition_state = "ready"
-                    self.starfield_speed = 0.1  # Very slow speed - almost stand still
-                    
-                    # Start ingame music looping
+                    self.starfield_speed = 0.1  
                     if self.ingame_music_path:
                         try:
                             pygame.mixer.music.load(self.ingame_music_path)
-                            pygame.mixer.music.play(-1)  # -1 means loop indefinitely
+                            pygame.mixer.music.play(-1)  
                             print(f"Ingame music started looping: {self.ingame_music_path}")
                         except Exception as e:
                             print(f"Could not play ingame music: {e}")
                     
                     print("Ready for game logic!")
-                    # Spawn asteroids when game starts (boss will spawn at score 1000)
                     self.spawn_asteroids()
-                    self.boss.active = False  # Don't show boss yet
+                    self.boss.active = False
                     self.score = 0
                     self.game_over = False
                     self.boss_intro_shown = False
@@ -3078,48 +3063,39 @@ class AstroSlayerGame:
             # Draw based on current state
             if state == "menu":
                 self.draw_menu()
-                # Draw asteroids, boss, and score if game is active
                 if self.transition_state == "ready":
                     self.draw_asteroids()
-                    # Only update/draw boss if it's active (score >= 1000)
                     if self.boss.active:
-                        # Handle boss defeat sequence
                         if self.boss_defeated and self.boss_defeat_sequence:
                             self.handle_boss_defeat_sequence()
                             frozen = True
                         else:
                             frozen = False
                         
-                        self.boss.update(is_talking=self.boss_intro_active, player=self.player, frozen=frozen)  # Pass whether boss is talking and if frozen
-                        
-                        # Handle boss drawing based on defeat sequence
+                        self.boss.update(is_talking=self.boss_intro_active, player=self.player, frozen=frozen) 
                         if self.boss_defeated and self.boss_defeat_sequence == "dialogue":
                             self.boss.draw(self.virtual_surface, rotation=0, scale=1.0)
                             self.draw_boss_defeat_dialogue()
                         elif self.boss_defeated and self.boss_defeat_sequence == "spinning":
-                            # Calculate shrink scale
+
                             shrink_progress = self.boss_defeat_timer / 120.0
-                            scale = max(0.1, 1.0 - shrink_progress * 0.9)  # Shrink from 1.0 to 0.1
+                            scale = max(0.1, 1.0 - shrink_progress * 0.9)
                             self.boss.draw(self.virtual_surface, rotation=self.boss_rotation, scale=scale)
                         else:
                             self.boss.draw(self.virtual_surface)
 
                         self.boss.draw_health_bar(self.virtual_surface)
                     self.draw_score()
-                    # Draw player hearts
                     if self.player.active and self.player.phase == "centered":
                         self.player.draw_hearts(self.virtual_surface)
                         self.draw_teleport_charges()
-                    # Draw pre-boss text if active
                     if self.pre_boss_text_active:
                         self.draw_pre_boss_text()
-                    # Draw boss intro if active
                     if self.boss_intro_active:
                         self.draw_boss_intro()
                     if self.game_over:
                         self.draw_game_over()
             else:
-                # Drawing game screen
                 self.virtual_surface.fill(BLACK)
                 self.draw_starfield(self.starfield_speed)
 
@@ -3127,19 +3103,16 @@ class AstroSlayerGame:
                 game_rect = game_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
                 self.virtual_surface.blit(game_text, game_rect)
 
-            # Scale and blit virtual surface to actual screen for resizable window support
             if self.scale_factor != 1.0:
                 scaled_surface = pygame.transform.scale(self.virtual_surface,
                                                       (int(WINDOW_WIDTH * self.scale_factor),
                                                        int(WINDOW_HEIGHT * self.scale_factor)))
-                # Center the scaled surface in the window
                 screen_width, screen_height = self.screen.get_size()
                 scaled_width, scaled_height = scaled_surface.get_size()
                 offset_x = (screen_width - scaled_width) // 2
                 offset_y = (screen_height - scaled_height) // 2
                 self.screen.blit(scaled_surface, (offset_x, offset_y))
             else:
-                # No scaling needed, just blit directly
                 self.screen.blit(self.virtual_surface, (0, 0))
 
             pygame.display.flip()
